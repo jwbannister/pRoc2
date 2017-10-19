@@ -1,8 +1,8 @@
 
 owens <- vector(mode="list", length=0)
-owens$polygons <- pull_onlake_polygons()
-owens$labels <- pull_onlake_labels()
-shoreline <- pull_shoreline_polygon()
+owens$polygons <- aiRsci::pull_onlake_polygons()
+owens$labels <- aiRsci::pull_onlake_labels()
+shoreline <- aiRsci::pull_shoreline_polygon()
 
 met_data_query <- function(date_begin, date_end){
     paste0("SELECT i.deployment, m.datetime, m.ws_10m, m.ws_10m_max, ",
