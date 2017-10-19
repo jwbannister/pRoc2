@@ -1,0 +1,9 @@
+Package: pRoc2
+Title: Functions and data for use in R script tools on proc2 (owens) AWS machine.
+Version: 0.0.0.9000
+Authors@R: person("John", "Bannister", email = "jbannister@airsci.com", role = c("aut", "cre"))
+Description: Any functions to be used in R tools on proc2 should be stored in this package. This package should be loaded onto proc2 using install_github and called as a library within the tools.
+Depends: R (>= 3.4.2)
+License: 
+Encoding: UTF-8
+LazyData: true
