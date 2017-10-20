@@ -100,7 +100,8 @@ wind_index <- c("W"=0*pi/16, "WSW"=2*pi/16, "SW"=4*pi/16, "SSW"=6*pi/16,
 
 
 # plot map background
-background <- aiRsci::pull_all_polygons() %>% 
+plot_dust_background <- function(polys=all_polys){
+    p1 <- polys %>% 
     ggplot(aes(x=x, y=y)) +
     geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
     geom_path(data=offlake, mapping=aes(group=objectid), color='white') +
@@ -130,4 +131,6 @@ background <- aiRsci::pull_all_polygons() %>%
           axis.ticks=element_blank(), 
           axis.text=element_blank(), 
           axis.title=element_blank())
+    p1
+}
 
