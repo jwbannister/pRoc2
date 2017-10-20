@@ -98,14 +98,9 @@ wind_index <- c("W"=0*pi/16, "WSW"=2*pi/16, "SW"=4*pi/16, "SSW"=6*pi/16,
                 "E"=16*pi/16, "ENE"=18*pi/16, "NE"=20*pi/16, "NNE"=22*pi/16, 
                 "N"=24*pi/16, "NNW"=26*pi/16, "NW"=28*pi/16, "WNW"=30*pi/16)
 
-dcas <- aiRsci::pull_onlake_polygons()
-offlake <- aiRsci::pull_offlake_polygons()
-shoreline <- aiRsci::pull_shoreline_polygon()
-shoreline$objectid <- rep(1, nrow(shoreline))
-all_polys <- aiRsci::pull_all_polygons()
 
 # plot map background
-background <- all_polys %>% 
+background <- aiRsci::pull_all_polygons() %>% 
     ggplot(aes(x=x, y=y)) +
     geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
     geom_path(data=offlake, mapping=aes(group=objectid), color='white') +
