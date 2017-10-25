@@ -49,7 +49,7 @@ met_location_query <- function(sites){
            "WHERE deployment IN ('", paste(sites, collapse="', '"), "');")
 }
 
-adjust_datetime <- function(x){
+format_NWS_datetime <- function(x){
     a <- gsub("T", " ", substr(x, 1, 19))
     b <- as.POSIXct(a, tz='UTC')
     attr(b, "tzone") <-"America/Los_Angeles"

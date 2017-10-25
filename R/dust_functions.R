@@ -98,39 +98,99 @@ wind_index <- c("W"=0*pi/16, "WSW"=2*pi/16, "SW"=4*pi/16, "SSW"=6*pi/16,
                 "E"=16*pi/16, "ENE"=18*pi/16, "NE"=20*pi/16, "NNE"=22*pi/16, 
                 "N"=24*pi/16, "NNW"=26*pi/16, "NW"=28*pi/16, "WNW"=30*pi/16)
 
+plot_extents <- c(404944, 428176, 4010612, 4052147)
 
 # plot map background
-plot_dust_background <- function(polys=all_polys){
-    p1 <- polys %>% 
-    ggplot(aes(x=x, y=y)) +
+plot_dust_background <- function(xmin=plot_extents[1], xmax=plot_extents[2], 
+                                 ymin=plot_extents[3], ymax=plot_extents[4], 
+                                 photo=F){
+    if (photo){
+        sq_extents <- square_extents(xmin, xmax, ymin, ymax)
+        xmin <- sq_extents[1]
+        xmax <- sq_extents[2]
+        ymin <- sq_extents[3]
+        ymax <- sq_extents[4]
+        bounds_utm <- sp::SpatialPoints(cbind(c(xmin, xmax), c(ymin, ymax)), 
+                                        proj4string=sp::CRS("+proj=utm +zone=11N"))
+        bounds_latlon <- sp::spTransform(bounds_utm, sp::CRS("+proj=longlat"))
+        p1 <- ggmap::get_map(location=bounds_latlon@bbox, 
+                             maptype=c("terrain"), source="google")
+        map_bbox <- attr(p1, 'bb') 
+        bounds_ras <- raster::extent(as.numeric(map_bbox[c(2, 4, 1, 3)]))
+        ras <- raster::raster(bounds_ras, nrow= nrow(p1), ncol = ncol(p1))
+        rgb_cols <- setNames(as.data.frame(t(col2rgb(p1))), c('red','green','blue'))
+        red <- ras
+        raster::values(red) <- rgb_cols[['red']]
+        green <- ras
+        raster::values(green) <- rgb_cols[['green']]
+        blue <- ras
+        raster::values(blue) <- rgb_cols[['blue']]
+        stack_latlon <- raster::stack(red,green,blue)
+        raster::crs(stack_latlon) <- "+proj=longlat"
+        stack_utm <- raster::projectRaster(stack_latlon, 
+                                           crs=sp::CRS("+proj=utm +zone=11N"))
+        df1 <- data.frame(raster::rasterToPoints(stack_utm))
+        df1 <- filter(df1, between(x, plot_extents[1], plot_extents[2]) &
+                      between(y, plot_extents[3], plot_extents[4]))
+        for (i in 3:5){
+            df1[ , i][df1[ , i]>255] <- 255
+            df1[ , i][df1[ , i]<0] <- 0
+        }
+        p2 <- ggplot(data=df1, aes(x=x, y=y)) + coord_equal() + theme_bw() +
+        geom_tile(aes(x=x, y=y, fill=rgb(layer.1,layer.2,layer.3, 
+                                         maxColorValue = 255)), alpha=0.75) + 
+        scale_fill_identity() + 
+        scale_x_continuous(breaks=range(df1$x)*c(1.01, 0.99), 
+                           labels=range(df1$x), expand = c(0,0)) +
+        scale_y_continuous(breaks=range(df1$y)*c(0.99, 1.01), 
+                           labels=range(df1$y), expand = c(0,0)) +
+        theme(panel.grid=element_blank(), 
+              plot.title=element_text(hjust=0.5), 
+              panel.background=element_rect(fill='darkgrey')) +
+        theme(axis.title=element_blank(), 
+              axis.text=element_blank(), 
+              axis.ticks=element_blank()) 
+    } else{
+        p2 <- ggplot(data=data.frame(x=1, y=1), aes(x=x, y=y)) + 
+            coord_equal() + 
+            geom_blank() +
+            theme(panel.grid=element_blank(), 
+                  plot.title=element_text(hjust=0.5), 
+                  panel.background=element_blank(), 
+                  axis.title=element_blank(), 
+                  axis.text=element_blank(), 
+                  axis.ticks=element_blank()) 
+    }
+    back_grob <- ggplot_2_grob(p2)
+    p3 <- ggplot(data=data.frame(x=1, y=1), aes(x=x, y=y)) + 
+    annotation_custom(back_grob, xmin=plot_extents[1], xmax=plot_extents[2], 
+                      ymin=plot_extents[3], ymax=plot_extents[4]) +
     geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
-    geom_path(data=offlake, mapping=aes(group=objectid), color='white') +
+    geom_path(data=offlake, mapping=aes(group=objectid), color='grey') +
     geom_path(data=shoreline, mapping=aes(group=area_name), color='blue') +
+    geom_path(data=highways, mapping=aes(group=name), color='black') +
+    geom_label(data=highway_labels, mapping=aes(label=name)) + 
     coord_equal() +
-    geom_rect(xmin=406000, xmax=407000, ymin=4013000, ymax=4013500, fill="black", 
-              color="black") + 
-    geom_rect(xmin=407000, xmax=408000, ymin=4013000, ymax=4013500, fill="white", 
-              color="black") + 
-    geom_rect(xmin=408000, xmax=409000, ymin=4013000, ymax=4013500, fill="black", 
-              color="black") + 
-    geom_rect(xmin=409000, xmax=410000, ymin=4013000, ymax=4013500, fill="white", 
-              color="black") + 
-    geom_rect(xmin=410000, xmax=411000, ymin=4013000, ymax=4013500, fill="black", 
-              color="black") + 
-    geom_text(data=data.frame(x=c(406000, 411000), y=c(4012500, 4012500), 
-                              label=c("0km", "5km")), 
-              mapping=aes(x=x, y=y, label=label)) +
-    geom_segment(data=data.frame(x=408500, y=4015100), 
-                 mapping=aes(x=x, xend=x, y=y, yend=y+1), 
-                 color="black", size=1, arrow=arrow(type="closed")) +
-    geom_text(data=data.frame(x=408500, y=4015500, label="N"), 
-              mapping=aes(x=x, y=y, label=label)) +
+#    geom_rect(xmin=406000, xmax=407000, ymin=4013000, ymax=4013500, fill="black", 
+#              color="black") + 
+#    geom_rect(xmin=407000, xmax=408000, ymin=4013000, ymax=4013500, fill="white", 
+#              color="black") + 
+#    geom_rect(xmin=408000, xmax=409000, ymin=4013000, ymax=4013500, fill="black", 
+#              color="black") + 
+#    geom_rect(xmin=409000, xmax=410000, ymin=4013000, ymax=4013500, fill="white", 
+#              color="black") + 
+#    geom_rect(xmin=410000, xmax=411000, ymin=4013000, ymax=4013500, fill="black", 
+#              color="black") + 
+#    geom_text(data=data.frame(x=c(406000, 411000), y=c(4012500, 4012500), 
+#                              label=c("0km", "5km")), 
+#              mapping=aes(x=x, y=y, label=label)) +
+#    geom_segment(data=data.frame(x=408500, y=4015100), 
+#                 mapping=aes(x=x, xend=x, y=y, yend=y+1), 
+#                 color="black", size=1, arrow=arrow(type="closed")) +
+#    geom_text(data=data.frame(x=408500, y=4015500, label="N"), 
+#              mapping=aes(x=x, y=y, label=label)) +
     annotation_custom(logo_grob, xmin=422000, xmax=427000, ymin=4012500, 
-                      ymax=4015500) +
-    theme(panel.background=element_blank(), 
-          axis.ticks=element_blank(), 
-          axis.text=element_blank(), 
-          axis.title=element_blank())
-    p1
+                      ymax=4015500)
+    p3
 }
 
