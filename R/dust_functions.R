@@ -12,18 +12,14 @@ list_vec_int <- function(a_list, b_vec){
     }
 }
 
-# make plume source id legend
-id_legend_plot <- ggplot(data.frame(x=.1, y=1, label="#"), aes(x=x, y=y, label=label)) +
-    geom_label(size=3) +
-    geom_text(mapping=aes(x=0.13, y=1, label="Plume Source ID"), hjust=0, 
-              size=3) +
-    xlim(0, .5) +
-    theme(panel.background=element_blank(), 
-          axis.ticks=element_blank(), 
-          axis.text=element_blank(), 
-          axis.title=element_blank())
-id_legend_grob <- ggplotGrob(id_legend_plot)
-id_legend_grob$vp <- grid::viewport(width=unit(.5, "npc"), height=unit(.1, "npc"))
+# make logo grob
+img <- png::readPNG("./data/logo.png")
+logo_grob <- grid::rasterGrob(img, interpolate=TRUE)
+
+wind_index <- c("W"=0*pi/16, "WSW"=2*pi/16, "SW"=4*pi/16, "SSW"=6*pi/16, 
+                "S"=8*pi/16, "SSE"=10*pi/16, "SE"=12*pi/16, "ESE"=14*pi/16, 
+                "E"=16*pi/16, "ENE"=18*pi/16, "NE"=20*pi/16, "NNE"=22*pi/16, 
+                "N"=24*pi/16, "NNW"=26*pi/16, "NW"=28*pi/16, "WNW"=30*pi/16)
 
 source_data_query <- function(date_begin, date_end){
     paste0("SELECT p1.*, p4.behavior ", 
@@ -31,10 +27,11 @@ source_data_query <- function(date_begin, date_end){
                "SELECT po.plume_observation_id AS id, po.datetime, ",
                "po.lat_long AS observer_position, ", 
                "po.wind_speed, ps.acres, wd.wind_direction_cardinal, ",
-               "pd.opacity, pc.confidence, psh.crosses_shoreline, ",
+               "pd.opacity, psh.crosses_shoreline, ",
                "po.met_conditions, po.observation_duration, po.comments, ",
                "po.temp_ambient, po.wind_direction_id, po.plume_density_id, ", 
-               "po.plume_confidence_id, po.plume_shoreline_id, u.full_name, ", 
+               "po.plume_shoreline_id, u.full_name, po.plume_source_type_id, ", 
+               "pt.plume_source_type, ",
                "ST_X(ST_CENTROID(ST_TRANSFORM(ps.area::geometry, 26911))) ", 
                "AS centroid_x, ",
                "ST_Y(ST_CENTROID(ST_TRANSFORM(ps.area::geometry, 26911))) ", 
@@ -48,10 +45,10 @@ source_data_query <- function(date_begin, date_end){
                "ON po.wind_direction_id=wd.wind_direction_id ",
                "LEFT JOIN field_data.plume_density pd ",
                "ON po.plume_density_id=pd.plume_density_id ",
+               "LEFT JOIN field_data.plume_source_types pt ",
+               "ON po.plume_source_type_id=pt.plume_source_type_id ",
                "LEFT JOIN field_data.plume_shoreline psh ",
                "ON po.plume_shoreline_id=psh.plume_shoreline_id ",
-               "LEFT JOIN field_data.plume_confidence pc ",
-               "ON po.plume_confidence_id=pc.plume_confidence_id ",
                "WHERE po.datetime::date BETWEEN '", date_begin, "' AND '", 
                date_end, "') p1 ", 
                "LEFT JOIN (",
@@ -90,20 +87,28 @@ traj_query <- function(date_begin, date_end){
            date_end, "';") 
 }
 
-img <- png::readPNG("./data/logo.png")
-logo_grob <- grid::rasterGrob(img, interpolate=TRUE)
-
-wind_index <- c("W"=0*pi/16, "WSW"=2*pi/16, "SW"=4*pi/16, "SSW"=6*pi/16, 
-                "S"=8*pi/16, "SSE"=10*pi/16, "SE"=12*pi/16, "ESE"=14*pi/16, 
-                "E"=16*pi/16, "ENE"=18*pi/16, "NE"=20*pi/16, "NNE"=22*pi/16, 
-                "N"=24*pi/16, "NNW"=26*pi/16, "NW"=28*pi/16, "WNW"=30*pi/16)
-
-plot_extents <- c(404944, 428176, 4010612, 4052147)
-
 # plot map background
-plot_dust_background <- function(xmin=plot_extents[1], xmax=plot_extents[2], 
-                                 ymin=plot_extents[3], ymax=plot_extents[4], 
-                                 photo=F){
+plot_dust_background <- function(extents, photo=F){
+    extents_df <- data.frame(x=c(extents[1], extents[2]), 
+                             y=c(extents[3], extents[4]))
+    p1 <- ggplot(extents_df, aes(x=x, y=y)) +
+        geom_blank() +
+        coord_equal() +
+        geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
+        geom_path(data=offlake, mapping=aes(group=objectid), color='grey') +
+        geom_path(data=shoreline, mapping=aes(group=area_name), color='steelblue1') +
+        geom_path(data=highways, mapping=aes(group=name), color='black') +
+        geom_label(data=highway_labels, mapping=aes(label=name), size=3, 
+               fill="darkgreen", color="white") +
+        theme(panel.grid=element_blank(), 
+              plot.title=element_text(hjust=0.5), 
+              panel.border=element_rect(color="black", fill=NA), 
+              panel.background=element_blank(), 
+              axis.title=element_blank(), 
+              axis.text=element_blank(), 
+              axis.ticks=element_blank()) 
+    plot_range <- data.frame(x=ggplot_build(p1)$layout$panel_ranges[[1]]$x.range, 
+                             y=ggplot_build(p1)$layout$panel_ranges[[1]]$y.range)
     if (photo){
         sq_extents <- square_extents(xmin, xmax, ymin, ymax)
         xmin <- sq_extents[1]
@@ -113,12 +118,13 @@ plot_dust_background <- function(xmin=plot_extents[1], xmax=plot_extents[2],
         bounds_utm <- sp::SpatialPoints(cbind(c(xmin, xmax), c(ymin, ymax)), 
                                         proj4string=sp::CRS("+proj=utm +zone=11N"))
         bounds_latlon <- sp::spTransform(bounds_utm, sp::CRS("+proj=longlat"))
-        p1 <- ggmap::get_map(location=bounds_latlon@bbox, 
+        p_tmp <- ggmap::get_map(location=bounds_latlon@bbox, 
                              maptype=c("terrain"), source="google")
-        map_bbox <- attr(p1, 'bb') 
+        map_bbox <- attr(p_tmp, 'bb') 
         bounds_ras <- raster::extent(as.numeric(map_bbox[c(2, 4, 1, 3)]))
-        ras <- raster::raster(bounds_ras, nrow= nrow(p1), ncol = ncol(p1))
-        rgb_cols <- setNames(as.data.frame(t(col2rgb(p1))), c('red','green','blue'))
+        ras <- raster::raster(bounds_ras, nrow= nrow(p_tmp), ncol = ncol(p_tmp))
+        rgb_cols <- setNames(as.data.frame(t(col2rgb(p_tmp))), 
+                             c('red','green','blue'))
         red <- ras
         raster::values(red) <- rgb_cols[['red']]
         green <- ras
@@ -150,47 +156,30 @@ plot_dust_background <- function(xmin=plot_extents[1], xmax=plot_extents[2],
         theme(axis.title=element_blank(), 
               axis.text=element_blank(), 
               axis.ticks=element_blank()) 
-    } else{
-        p2 <- ggplot(data=data.frame(x=1, y=1), aes(x=x, y=y)) + 
-            coord_equal() + 
-            geom_blank() +
-            theme(panel.grid=element_blank(), 
-                  plot.title=element_text(hjust=0.5), 
-                  panel.background=element_blank(), 
-                  axis.title=element_blank(), 
-                  axis.text=element_blank(), 
-                  axis.ticks=element_blank()) 
-    }
-    back_grob <- ggplot_2_grob(p2)
-    p3 <- ggplot(data=data.frame(x=1, y=1), aes(x=x, y=y)) + 
-    annotation_custom(back_grob, xmin=plot_extents[1], xmax=plot_extents[2], 
-                      ymin=plot_extents[3], ymax=plot_extents[4]) +
-    geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
-    geom_path(data=offlake, mapping=aes(group=objectid), color='grey') +
-    geom_path(data=shoreline, mapping=aes(group=area_name), color='blue') +
-    geom_path(data=highways, mapping=aes(group=name), color='black') +
-    geom_label(data=highway_labels, mapping=aes(label=name)) + 
-    coord_equal() +
-#    geom_rect(xmin=406000, xmax=407000, ymin=4013000, ymax=4013500, fill="black", 
-#              color="black") + 
-#    geom_rect(xmin=407000, xmax=408000, ymin=4013000, ymax=4013500, fill="white", 
-#              color="black") + 
-#    geom_rect(xmin=408000, xmax=409000, ymin=4013000, ymax=4013500, fill="black", 
-#              color="black") + 
-#    geom_rect(xmin=409000, xmax=410000, ymin=4013000, ymax=4013500, fill="white", 
-#              color="black") + 
-#    geom_rect(xmin=410000, xmax=411000, ymin=4013000, ymax=4013500, fill="black", 
-#              color="black") + 
-#    geom_text(data=data.frame(x=c(406000, 411000), y=c(4012500, 4012500), 
-#                              label=c("0km", "5km")), 
-#              mapping=aes(x=x, y=y, label=label)) +
-#    geom_segment(data=data.frame(x=408500, y=4015100), 
-#                 mapping=aes(x=x, xend=x, y=y, yend=y+1), 
-#                 color="black", size=1, arrow=arrow(type="closed")) +
-#    geom_text(data=data.frame(x=408500, y=4015500, label="N"), 
-#              mapping=aes(x=x, y=y, label=label)) +
-    annotation_custom(logo_grob, xmin=422000, xmax=427000, ymin=4012500, 
-                      ymax=4015500)
-    p3
+        back_grob <- ggplot_2_grob(p2)
+    } 
+    p2 <- p1 + 
+    geom_rect(data=plot_range, xmin=plot_range$x[1], xmax=plot_range$x[1]+2000, 
+              ymin=plot_range$y[1], ymax=plot_range$y[1]+1000, 
+              fill="black", color="black") + 
+    geom_rect(data=plot_range, xmin=plot_range$x[1]+2000, xmax=plot_range$x[1]+4000, 
+              ymin=plot_range$y[1], ymax=plot_range$y[1]+1000, 
+              fill="white", color="black") + 
+    geom_rect(data=plot_range, xmin=plot_range$x[1]+4000, xmax=plot_range$x[1]+6000, 
+              ymin=plot_range$y[1], ymax=plot_range$y[1]+1000, 
+              fill="black", color="black") + 
+    geom_rect(data=plot_range, xmin=plot_range$x[1]+6000, xmax=plot_range$x[1]+8000, 
+              ymin=plot_range$y[1], ymax=plot_range$y[1]+1000, 
+              fill="white", color="black") + 
+    geom_rect(data=plot_range, xmin=plot_range$x[1]+8000, xmax=plot_range$x[1]+10000, 
+              ymin=plot_range$y[1], ymax=plot_range$y[1]+1000, 
+              fill="black", color="black") + 
+    geom_text(data=data.frame(x=c(plot_range$x[1], plot_range$x[1]+10000), 
+                              y=c(plot_range$y[1]-700, plot_range$y[1]-700), 
+                              label=c("0km", "10km")), 
+              mapping=aes(x=x, y=y, label=label), size=3) +
+    annotation_custom(logo_grob, xmin=plot_range$x[2]-8000, xmax=plot_range$x[2], 
+                      ymin=plot_range$y[1]-2000, ymax=plot_range$y[1]+2000)
+    p2
 }
 
