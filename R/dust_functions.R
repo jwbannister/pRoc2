@@ -66,10 +66,13 @@ source_poly_query <- function(date_begin, date_end){
            "ST_X(ST_TRANSFORM((ST_DUMPPOINTS(ps.area::geometry)).geom, 26911)) ",
            "AS x, ",
            "ST_Y(ST_TRANSFORM((ST_DUMPPOINTS(ps.area::geometry)).geom, 26911)) ",
-           "AS y ", 
+           "AS y, ", 
+           "pt.plume_source_type ", 
            "FROM field_data.plume_source ps ", 
            "JOIN field_data.plume_observations po ", 
            "ON ps.plume_observation_id=po.plume_observation_id ",
+           "LEFT JOIN field_data.plume_source_types pt ",
+           "ON po.plume_source_type_id=pt.plume_source_type_id ",
            "WHERE po.datetime::date BETWEEN '", date_begin, "' AND '", 
            date_end, "';") 
 }
