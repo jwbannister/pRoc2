@@ -91,7 +91,8 @@ traj_query <- function(date_begin, date_end){
 }
 
 # plot map background
-plot_dust_background <- function(extents, photo=F){
+plot_dust_background <- function(extents=c(407000, 425000, 4017000, 4051000), 
+                                 photo=F){
     extents_df <- data.frame(x=c(extents[1], extents[2]), 
                              y=c(extents[3], extents[4]))
     p1 <- ggplot(extents_df, aes(x=x, y=y)) +
