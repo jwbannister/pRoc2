@@ -96,7 +96,6 @@ plot_dust_background <- function(extents=c(407000, 425000, 4017000, 4051000),
     extents_df <- data.frame(x=c(extents[1], extents[2]), 
                              y=c(extents[3], extents[4]))
     p1 <- ggplot(extents_df, aes(x=x, y=y)) +
-        geom_blank() +
         coord_equal() +
         geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
         geom_path(data=offlake, mapping=aes(group=objectid), color='grey') +
@@ -107,14 +106,15 @@ plot_dust_background <- function(extents=c(407000, 425000, 4017000, 4051000),
         theme(panel.grid=element_blank(), 
               plot.title=element_text(hjust=0.5), 
               panel.border=element_rect(color="black", fill=NA), 
-              panel.background=element_blank(), 
-              axis.title=element_blank(), 
-              axis.text=element_blank(), 
-              axis.ticks=element_blank()) 
+              panel.background=element_blank()) 
+#              axis.title=element_blank(), 
+#              axis.text=element_blank(), 
+#              axis.ticks=element_blank()) 
     plot_range <- data.frame(x=ggplot_build(p1)$layout$panel_ranges[[1]]$x.range, 
                              y=ggplot_build(p1)$layout$panel_ranges[[1]]$y.range)
     if (photo){
-        sq_extents <- square_extents(xmin, xmax, ymin, ymax)
+        sq_extents <- square_extents(plot_range$x[1], plot_range$x[2], 
+                                     plot_range$y[1], plot_range$y[2])
         xmin <- sq_extents[1]
         xmax <- sq_extents[2]
         ymin <- sq_extents[3]
@@ -123,7 +123,8 @@ plot_dust_background <- function(extents=c(407000, 425000, 4017000, 4051000),
                                         proj4string=sp::CRS("+proj=utm +zone=11N"))
         bounds_latlon <- sp::spTransform(bounds_utm, sp::CRS("+proj=longlat"))
         p_tmp <- ggmap::get_map(location=bounds_latlon@bbox, 
-                             maptype=c("terrain"), source="google")
+                             maptype=c("terrain"), source="google", 
+                             zoom=10)
         map_bbox <- attr(p_tmp, 'bb') 
         bounds_ras <- raster::extent(as.numeric(map_bbox[c(2, 4, 1, 3)]))
         ras <- raster::raster(bounds_ras, nrow= nrow(p_tmp), ncol = ncol(p_tmp))
@@ -140,26 +141,32 @@ plot_dust_background <- function(extents=c(407000, 425000, 4017000, 4051000),
         stack_utm <- raster::projectRaster(stack_latlon, 
                                            crs=sp::CRS("+proj=utm +zone=11N"))
         df1 <- data.frame(raster::rasterToPoints(stack_utm))
-        df1 <- filter(df1, between(x, plot_extents[1], plot_extents[2]) &
-                      between(y, plot_extents[3], plot_extents[4]))
+        df2 <- filter(df1, between(x, plot_range$x[1], plot_range$x[2]) &
+                      between(y, plot_range$y[1], plot_range$y[2]))
         for (i in 3:5){
-            df1[ , i][df1[ , i]>255] <- 255
-            df1[ , i][df1[ , i]<0] <- 0
+            df2[ , i][df2[ , i]>255] <- 255
+            df2[ , i][df2[ , i]<0] <- 0
         }
-        p2 <- ggplot(data=df1, aes(x=x, y=y)) + coord_equal() + theme_bw() +
+        p2 <- ggplot(data=df2, aes(x=x, y=y)) + coord_equal() + theme_bw() +
         geom_tile(aes(x=x, y=y, fill=rgb(layer.1,layer.2,layer.3, 
                                          maxColorValue = 255)), alpha=0.75) + 
         scale_fill_identity() + 
-        scale_x_continuous(breaks=range(df1$x)*c(1.01, 0.99), 
-                           labels=range(df1$x), expand = c(0,0)) +
-        scale_y_continuous(breaks=range(df1$y)*c(0.99, 1.01), 
-                           labels=range(df1$y), expand = c(0,0)) +
+        scale_x_continuous(breaks=range(df2$x)*c(1.01, 0.99), 
+                           labels=range(df2$x), expand = c(0,0)) +
+        scale_y_continuous(breaks=range(df2$y)*c(0.99, 1.01), 
+                           labels=range(df2$y), expand = c(0,0)) +
+        geom_path(data=dcas, mapping=aes(group=objectid), color='grey') +
+        geom_path(data=offlake, mapping=aes(group=objectid), color='grey') +
+        geom_path(data=shoreline, mapping=aes(group=area_name), color='steelblue1') +
+        geom_path(data=highways, mapping=aes(group=name), color='black') +
+        geom_label(data=highway_labels, mapping=aes(label=name), size=3, 
+               fill="darkgreen", color="white") +
         theme(panel.grid=element_blank(), 
               plot.title=element_text(hjust=0.5), 
-              panel.background=element_rect(fill='darkgrey')) +
-        theme(axis.title=element_blank(), 
-              axis.text=element_blank(), 
-              axis.ticks=element_blank()) 
+              panel.background=element_rect(fill='darkgrey')) 
+#        theme(axis.title=element_blank(), 
+#              axis.text=element_blank(), 
+#              axis.ticks=element_blank()) 
         back_grob <- ggplot_2_grob(p2)
     } 
     p2 <- p1 + 
